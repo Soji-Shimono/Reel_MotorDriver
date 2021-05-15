@@ -11,6 +11,7 @@
 #include "adc.h"
 //#include "thDrive.h"
 #include "delays.h"
+#include "INA226.h"
 
 #pragma config FOSC = HS2	
 #pragma config PLLCFG = ON	//PLL40MHz
@@ -43,12 +44,16 @@ unsigned short long readMs5837ADC(char adcconf);
 void init(void);
 unsigned int getADC(void);
 void calcValues(unsigned short long D1,unsigned short long D2);
+signed int getIna226(unsigned char adr_);
+void setIna226pointer(unsigned char adr_, unsigned char pointer_);
+void setIna226Value(unsigned char adr_,unsigned char pointer_,unsigned int data);
 //????===================================================================
 BOOL TimerFlag = FALSE;
 BOOL LEDFlag = TRUE;
+BOOL DEADTIMEFLAG = TRUE;
 int T_Counter = 0;
 int LED_Counter = 0;
-BYTE TimeOut_Counter = 0;
+unsigned int TimeOut_Counter = 0;
 BYTE test = 0;
 //CAN??
 unsigned int idR_TH1  = 16;
@@ -59,9 +64,12 @@ const unsigned long idT_PRES = 20;
 const unsigned long idT_TEMP = 21;
 const unsigned long idT_BATTINFO = 22;
 
-const BYTE TH_TIMEOUT = 30;
+const unsigned int TH_TIMEOUT = 1220;
 
 int thCmd[6]= {0x00,0x00,0x00,0x00,0x00,0x00};
+int _thCmd[6]= {0x00,0x00,0x00,0x00,0x00,0x00};
+BOOL deadtimeflg[6] = {FALSE,FALSE,FALSE,FALSE,FALSE,FALSE};
+BOOL _deadtimeflg[6] = {FALSE,FALSE,FALSE,FALSE,FALSE,FALSE};
 int thCmTest = 0;
 char thAdr[6] = {0x50,0x51,0x52,0x53,0x54,0x55};
 //char thAdr[6] = {0x29,0x2a,0x2b,0x2c,0x2d,0x2e};
@@ -77,7 +85,8 @@ signed long off;
 signed long sens;
 signed long pressure;
 BYTE tstMessage[4] = {0xde,0xad,0xbe,0xaf};
-unsigned int battVoltage = 0;
+signed int battVoltage = 0;
+signed int battCurrent = 0;
 unsigned short long data1 = 0;
 unsigned short long data2 = 0;
 
@@ -102,14 +111,16 @@ void isr(void){
 		T_Counter++;
         LED_Counter++;
 		TimeOut_Counter++;
-		if(T_Counter >= 61){//10Hz //61
+		if(T_Counter >= 61){//20Hz
 			T_Counter = 0;
 			TimerFlag = TRUE;
 		}
         if(LED_Counter >= 610){//2Hz
 			LED_Counter = 0;
 			LEDFlag = TRUE;
-		}	
+            //DEADTIMEFLAG = TRUE;
+		}
+        DEADTIMEFLAG = TRUE;
 	}
 }
 //?????=========================================================================
@@ -130,6 +141,8 @@ void main()
         data_T[1] = (promCoeff[i] & 0x00ff);
         while(!ECANSendMessage(idT_TEMP, data_T,2, ECAN_TX_STD_FRAME));
     }
+    
+    setIna226Value(0x40,0x05,0x0a00);
     //int cnt;
     promCoeff[0] = promCoeff[0] & 0x0fff;
     //unsigned int n_prom7 = 0;
@@ -166,20 +179,72 @@ void main()
                     for(i = 0; i < 4; i++){
                         thCmd[i] = data_R[i*2];
                         thCmd[i] = (thCmd[i] <<8 )|data_R[i*2+1];
+                        
+                        if( 
+                            (
+                                ( ((_thCmd[i] & 0x8000)  != ( thCmd[i] & 0x8000) ) && (_thCmd[i] !=0) && (thCmd[i] !=0)) ||
+                                ( (_thCmd[i] == 0) && (thCmd[i] != 0) ) 
+                            ) && !deadtimeflg[i]
+                        ){
+                            deadtimeflg[i] = TRUE;
+                        }
+                        _thCmd[i] = thCmd[i];
+                        
+                        if(deadtimeflg[i]){
+                            thCmd[i] = 0;
+                        }
+                        //_thCmd[i] = thCmd[i];
                     }    
                     TimeOut_Counter = 0;
+                    
+                    for(i = 0; i < 4; i++){
+                        writeESCtest(thAdr[i],thCmd[i]);
+                    }
+                    
                     break;
-                case 75:
+                case 0x75:
+                    while(!ECANSendMessage(0xff, tstMessage,4, ECAN_TX_STD_FRAME));
                     for(i = 0; i < 2; i++){
                         thCmd[i+4] = data_R[i*2];
-                        thCmd[i+4] = (thCmd[i] <<8 )|data_R[i*2+1];
+                        thCmd[i+4] = (thCmd[i+4] <<8 )|data_R[i*2+1];
+                        if( 
+                            (
+                                ( ((_thCmd[i+4] & 0x8000)  != ( thCmd[i+4] & 0x8000) ) && (_thCmd[i+4] !=0) && (thCmd[i+4] !=0)) ||
+                                ( (_thCmd[i+4] == 0) && (thCmd[i+4] != 0) ) 
+                            )&& !deadtimeflg[i+4]
+                        ){
+                            deadtimeflg[i+4] = TRUE;
+                        }
+                        _thCmd[i+4] = thCmd[i+4];
+                        
+                        if(deadtimeflg[i+4]){
+                            thCmd[i+4] = 0;
+                        }
+                        //_thCmd[i+4] = thCmd[i+4];
                     }
                     TimeOut_Counter = 0;
+                    
+                    for(i = 0; i < 2; i++){
+                        writeESCtest(thAdr[i+4],thCmd[i+4]);
+                    }
+                    
                     break;
                 default:
                     break;                  
             }
         }
+        //DeaTimeCheck
+        if(DEADTIMEFLAG){
+            DEADTIMEFLAG = FALSE;
+            for(i = 0; i < 6; i++){
+                if(_deadtimeflg[i]){
+                    deadtimeflg[i] = FALSE;
+                }
+                _deadtimeflg[i] = deadtimeflg[i];
+            }
+            //_deadtimeflg = deadtimeflg;
+        }
+        
 		//LED flashing
         if(LEDFlag){
             LEDFlag =FALSE;
@@ -189,16 +254,21 @@ void main()
 		if(TimerFlag){
 			TimerFlag = FALSE;
             //while(!ECANSendMessage(0xff, tstMessage,4, ECAN_TX_STD_FRAME));
+            
             if(TimeOut_Counter > TH_TIMEOUT){
                 for(i =0; i<6; i++){
                     thCmd[i] = 0;
                 }
             }
+            
             //please write thruster controll adn getting propelloer speed method 
-            //thruster write            
+            //thruster write    
+            /*
             for(i = 0; i < 6; i++){
-                //writeESCtest(thAdr[i],thCmd[i]);
-            }            
+                writeESCtest(thAdr[i],thCmd[i]);
+            }
+            */
+            //writeESCtest(thAdr[5],1);
             //thruster read
             
             for(i = 0; i < 6; i++){
@@ -233,6 +303,15 @@ void main()
             data_T[3] = ((pressure) & 0x0000ff);
             while(!ECANSendMessage(idT_PRES, data_T,4, ECAN_TX_STD_FRAME));
             
+            setIna226pointer(0x40, 0x02);
+            battVoltage = getIna226(0x40);
+            setIna226pointer(0x40, 0x04);
+            battCurrent = getIna226(0x40);
+            data_T[0] = ((battVoltage >> 8) & 0x00ff);
+            data_T[1] = (battVoltage & 0x00ff);
+            data_T[2] = ((battCurrent >> 8) & 0x00ff);
+            data_T[3] = (battCurrent & 0x00ff);
+            while(!ECANSendMessage(idT_BATTINFO, data_T,4, ECAN_TX_STD_FRAME));
 		}
 	}
 }
@@ -509,4 +588,82 @@ unsigned int getADC(void){
     ConvertADC();
     while(BusyADC()){}
     return ReadADC();
+}
+
+void setIna226pointer(unsigned char adr_, unsigned char pointer_){
+    unsigned char adr = (adr_) << 1;
+    unsigned char pointer = pointer_;
+    //
+    IdleI2C();
+    StartI2C();
+    while(SSPCON2bits.SEN){}
+    if(PIR2bits.BCLIF){return(1);
+    }else{
+        if(WriteI2C(adr)){}        
+        IdleI2C();
+        if(!SSPCON2bits.ACKSTAT){
+            if(WriteI2C(pointer)){return(2);
+            }
+        }
+    }
+    IdleI2C();
+    if(!SSPCON2bits.ACKSTAT){
+        StopI2C();
+    }
+}
+signed int  getIna226(unsigned char adr_){
+    unsigned char adr = adr_;
+    signed int data;
+    adr = ((adr <<1) | 0x01);
+    //
+    IdleI2C();
+    StartI2C();
+    while(SSPCON2bits.SEN){}
+    if(PIR2bits.BCLIF){return(1);
+    }else{
+        if(WriteI2C(adr)){}        
+        IdleI2C();
+        if(!SSPCON2bits.ACKSTAT){
+            data = ReadI2C();
+            AckI2C();
+            data = ( data <<8 ) | ReadI2C();
+            NotAckI2C();
+            IdleI2C();
+            StopI2C();
+            while(SSPCON2bits.PEN){};
+            if(PIR2bits.BCLIF){return(6);
+                }    
+            return(data);
+        }
+    }
+}
+
+void setIna226Value(unsigned char adr_,unsigned char pointer_,unsigned int data){
+    unsigned char adr = adr_;
+    adr = ((adr <<1));
+    //
+    IdleI2C();
+    StartI2C();
+    while(SSPCON2bits.SEN){}
+    if(PIR2bits.BCLIF){return(1);
+    }else{
+        if(WriteI2C(adr)){}        
+        IdleI2C();
+        if(!SSPCON2bits.ACKSTAT){
+            WriteI2C(pointer_);
+            if(!SSPCON2bits.ACKSTAT){
+                WriteI2C((data >> 8));
+                if(!SSPCON2bits.ACKSTAT){
+                    WriteI2C((data &0xff));
+                    if(!SSPCON2bits.ACKSTAT){
+                        IdleI2C();
+                        StopI2C();
+                        while(SSPCON2bits.PEN){};
+                        if(PIR2bits.BCLIF){return(6);
+                        }    
+                    }
+                }
+            }
+        }
+    }
 }
