@@ -114,7 +114,7 @@
 // RXF0 Filter Type
 		#define ECAN_RXF0_MSG_TYPE_VAL ECAN_MSG_STD
 // RXF0 Value
-		#define ECAN_RXF0_VAL 0x00L
+		#define ECAN_RXF0_VAL 0x70L
 // RXF0 Buffer Link
 		#define ECAN_RXF0_BUFFER_VAL RXB0
 // RXF0 Mask Link
@@ -147,7 +147,7 @@
 // RXF3 Filter Type
 		#define ECAN_RXF3_MSG_TYPE_VAL ECAN_MSG_STD
 // RXF3 Value
-		#define ECAN_RXF3_VAL 0x040L
+		#define ECAN_RXF3_VAL 0x076L
 // RXF3 Buffer Link
 		#define ECAN_RXF3_BUFFER_VAL B1
 // RXF3 Mask Link

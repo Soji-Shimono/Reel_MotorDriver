@@ -10,9 +10,9 @@ CND_CONF=default
 CND_DISTDIR=dist
 TMPDIR=build/${CND_CONF}/${IMAGE_TYPE}/tmp-packaging
 TMPDIRNAME=tmp-packaging
-OUTPUT_PATH=dist/${CND_CONF}/${IMAGE_TYPE}/Motor_Pressure_Controll.X.${IMAGE_TYPE}.${OUTPUT_SUFFIX}
-OUTPUT_BASENAME=Motor_Pressure_Controll.X.${IMAGE_TYPE}.${OUTPUT_SUFFIX}
-PACKAGE_TOP_DIR=motorpressurecontroll.x/
+OUTPUT_PATH=dist/${CND_CONF}/${IMAGE_TYPE}/TMS_ReelDrive.X.${IMAGE_TYPE}.${OUTPUT_SUFFIX}
+OUTPUT_BASENAME=TMS_ReelDrive.X.${IMAGE_TYPE}.${OUTPUT_SUFFIX}
+PACKAGE_TOP_DIR=tmsreeldrive.x/
 
 # Functions
 function checkReturnCode
@@ -57,15 +57,15 @@ mkdir -p ${TMPDIR}
 
 # Copy files and create directories and links
 cd "${TOP}"
-makeDirectory ${TMPDIR}/motorpressurecontroll.x/bin
+makeDirectory ${TMPDIR}/tmsreeldrive.x/bin
 copyFileToTmpDir "${OUTPUT_PATH}" "${TMPDIR}/${PACKAGE_TOP_DIR}bin/${OUTPUT_BASENAME}" 0755
 
 
 # Generate tar file
 cd "${TOP}"
-rm -f ${CND_DISTDIR}/${CND_CONF}/package/motorpressurecontroll.x.tar
+rm -f ${CND_DISTDIR}/${CND_CONF}/package/tmsreeldrive.x.tar
 cd ${TMPDIR}
-tar -vcf ../../../../${CND_DISTDIR}/${CND_CONF}/package/motorpressurecontroll.x.tar *
+tar -vcf ../../../../${CND_DISTDIR}/${CND_CONF}/package/tmsreeldrive.x.tar *
 checkReturnCode
 
 # Cleanup

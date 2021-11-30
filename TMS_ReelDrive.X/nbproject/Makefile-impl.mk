@@ -24,7 +24,7 @@ CLEAN_SUBPROJECTS=${CLEAN_SUBPROJECTS_${SUBPROJECTS}}
 
 
 # Project Name
-PROJECTNAME=Motor_Pressure_Controll.X
+PROJECTNAME=TMS_ReelDrive.X
 
 # Active Configuration
 DEFAULTCONF=default
